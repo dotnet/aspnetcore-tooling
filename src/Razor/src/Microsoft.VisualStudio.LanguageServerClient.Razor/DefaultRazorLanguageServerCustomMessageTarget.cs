@@ -332,8 +332,7 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
                 throw new ArgumentNullException(nameof(semanticTokensEditsParams));
             }
 
-            var documentPath = semanticTokensEditsParams.TextDocument.Uri.GetFileSystemPath();
-            var documentUri = new Uri(documentPath);
+            var documentUri = semanticTokensEditsParams.TextDocument.Uri.ToUri();
             var csharpDoc = GetCSharpDocumentSnapshsot(documentUri);
             if (csharpDoc is null)
             {
@@ -348,27 +347,14 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
                 return new ProvideSemanticTokensEditsResponse(tokens: null, edits: null, resultId: null, csharpDoc.HostDocumentSyncVersion);
             }
 
-            if (csharpDoc.HostDocumentSyncVersion != semanticTokensEditsParams.RequiredHostDocumentVersion)
-            {
-                csharpDoc = GetCSharpDocumentSnapshsot(documentUri);
-                if (csharpDoc is null)
-                {
-                    return null;
-                }
-            }
-
-            var textDocument = new TextDocumentIdentifier
-            {
-                Uri = documentUri,
-            };
-
             var newParams = new SemanticTokensEditsParams
             {
-                TextDocument = textDocument,
-                PreviousResultId = semanticTokensEditsParams.PreviousResultId
+                TextDocument = new TextDocumentIdentifier
+                {
+                    Uri = csharpDoc.Uri,
+                },
+                PreviousResultId = semanticTokensEditsParams.PreviousResultId,
             };
-
-            newParams.TextDocument.Uri = csharpDoc.Uri;
 
             var csharpResponse = await _requestInvoker.ReinvokeRequestOnServerAsync<SemanticTokensEditsParams, SumType<LanguageServer.Protocol.SemanticTokens, SemanticTokensEdits>>(
                 LanguageServerConstants.LegacyRazorSemanticTokensEditEndpoint,
@@ -380,7 +366,7 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
             // Converting from LSP to O# types
             if (csharpResults.Value is LanguageServer.Protocol.SemanticTokens tokens)
             {
-                var response = new ProvideSemanticTokensEditsResponse(tokens.Data, edits: null, tokens.ResultId, csharpDoc.HostDocumentSyncVersion);
+                var response = new ProvideSemanticTokensEditsResponse(tokens.Data, edits: null, tokens.ResultId, semanticTokensEditsParams.RequiredHostDocumentVersion);
                 return response;
             }
             else if (csharpResults.Value is SemanticTokensEdits edits)
